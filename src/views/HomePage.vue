@@ -23,22 +23,31 @@
           <ion-select-option value="yandex">Yandex Maps</ion-select-option>
         </ion-select>
       </ion-item>
-      <ion-button @click="openSelectedMap(selectedMap)">Open Map</ion-button>
+      <ion-button @click="openSelectedMap">Open Map</ion-button>
     </ion-content>
   </ion-page>
 </template>
 
 <script setup>
-import { IonContent, IonHeader, IonPage, IonTitle, IonToolbar } from '@ionic/vue';
-import { IonItem, IonLabel, IonInput, IonSelect, IonSelectOption, IonButton, toastController } from '@ionic/vue';
+import { IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonItem, IonLabel, IonInput, IonSelect, IonSelectOption, IonButton, toastController } from '@ionic/vue';
 import { Capacitor } from '@capacitor/core';
 import { AppLauncher } from '@capacitor/app-launcher';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 const lat = ref('');
 const lng = ref('');
-const selectedMap = ref('');
-/* create toast message for if lon or lng is empty */
+const selectedMap = ref('google');
+
+const packageName = computed(() => {
+  const platform = Capacitor.getPlatform();
+  if (platform === 'android') {
+    return selectedMap.value === 'google' ? 'com.google.android.apps.maps' : 'ru.yandex.yandexmaps';
+  } else if (platform === 'ios') {
+    return selectedMap.value === 'google' ? 'comgooglemaps://' : 'yandexmaps://';
+  }
+  return '';
+});
+
 const createToast = async (message) => {
   const toast = await toastController.create({
     message: message,
@@ -48,33 +57,24 @@ const createToast = async (message) => {
   toast.present();
 };
 
-const openSelectedMap = async (mapApp) => {
-  /* if lat or lng empty alert ionic */
-  if (!lat.value || !lng.value || !selectedMap.value) {
+const openSelectedMap = async () => {
+  if (!lat.value || !lng.value) {
     createToast('Please fill in all fields');
     return;
   }
   try {
-    let packageName;
-    if (Capacitor.getPlatform() === 'android') {
-      packageName = mapApp === 'google' ? 'com.google.android.apps.maps' : 'ru.yandex.yandexmaps';
-    } else if (Capacitor.getPlatform() === 'ios') {
-      packageName = mapApp === 'google' ? 'comgooglemaps://' : 'yandexmaps://';
-    }
-    const result = await AppLauncher.canOpenUrl({ url: packageName });
+    const result = await AppLauncher.canOpenUrl({ url: packageName.value });
     if (result) {
-      let url;
-      if (mapApp === 'google') {
-        url = `geo:${lat.value},${lng.value}?z=14&q=${lat.value},${lng.value}`;
-      } else {
-        url = `yandexmaps://maps.yandex.ru/?pt=${lat.value},${lng.value}&z=14`;
-      }
+      const url = selectedMap.value === 'google'
+        ? `geo:${lat.value},${lng.value}?z=14&q=${lat.value},${lng.value}`
+        : `yandexmaps://maps.yandex.ru/?pt=${lat.value},${lng.value}&z=14`;
       await AppLauncher.openUrl({ url: url });
     } else {
-      console.log(`${mapApp === 'google' ? 'Google Maps' : 'Yandex Maps'} is not installed on this device`);
+      createToast(`${selectedMap.value === 'google' ? 'Google Maps' : 'Yandex Maps'} is not installed on this device`);
     }
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    createToast('An error occurred while opening the map');
   }
 };
 
